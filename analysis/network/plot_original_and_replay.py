@@ -25,21 +25,47 @@ t_repl = replayed_robot_data[:, 0] - replayed_robot_data[0, 0]
 # Using min to find the end of the x-axis
 max_time = min(t_orig[-1], t_repl[-1])
 
+# Dictionary to map the left and right arms with the corresponding columns
 arms = [
     {"name": "Left", "xyz_cols": [2, 3, 4], "yaw_col": 7},
     {"name": "Right", "xyz_cols": [8, 9, 10], "yaw_col": 13}
 ]
 
+# Loops for left and right arms
 for arm in arms:   
     fig, axs = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
     fig.suptitle(f'{arm["name"]} Robotic Arm Trajectory (X, Y, Z, Yaw) vs Time: Original vs Replayed')
 
+    # Find the shortest array length
+    min_len = min(len(original_robot_data), len(replayed_robot_data))
+
     for ax, col, label in zip(axs[:3], arm["xyz_cols"], ['X', 'Y', 'Z']):
+        # Slice both arrays to the same minimum length
+        sliced_ori = original_robot_data[:min_len, col]
+        sliced_repl = replayed_robot_data[:min_len, col]
+
+        # Calculates Error 
+        absolute_error = np.abs(sliced_repl - sliced_ori)
+        mae = np.mean(absolute_error)
+        max_error = np.max(absolute_error)
+
+        print(f'{arm["name"]} {label} | MAE: {mae:.6f} | Max Error: {max_error:.6f}')
+
+        # Plots the data
         ax.plot(t_orig, original_robot_data[:, col] - original_robot_data[0, col], label='Original PSM')
         ax.plot(t_repl, replayed_robot_data[:, col] - replayed_robot_data[0, col], '--', label='Replayed PSM')
         ax.set_ylabel(f'{label} position')
         ax.legend()
 
+    # Calculate and print yaw errors
+    sliced_ori_yaw = original_robot_data[:min_len, arm["yaw_col"]]
+    sliced_repl_yaw = replayed_robot_data[:min_len, arm["yaw_col"]]
+    yaw_abs_error = np.abs(sliced_repl_yaw - sliced_ori_yaw)
+    yaw_mae = np.mean(yaw_abs_error)
+    yaw_max = np.max(yaw_abs_error)
+    print(f'{arm["name"]} Yaw | MAE: {yaw_mae:.6f} | Max Error: {yaw_max:.6f}')
+
+    # Plot Yaw
     axs[3].plot(t_orig, original_robot_data[:, arm["yaw_col"]] - original_robot_data[0, arm["yaw_col"]], label='Original Yaw')
     axs[3].plot(t_repl, replayed_robot_data[:, arm["yaw_col"]] - replayed_robot_data[0, arm["yaw_col"]], '--', label='Replayed Yaw')
     axs[3].set_ylabel('Yaw')
@@ -48,6 +74,7 @@ for arm in arms:
 
     for ax in axs:
         ax.set_xlim(0, max_time)
+        
     plt.tight_layout()
 
 plt.show()
