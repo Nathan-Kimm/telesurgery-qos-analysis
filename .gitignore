@@ -1,0 +1,7 @@
+# Pycache files
+__pycache__/
+*.pyc
+
+# Data Files
+SurRoL_dVTrainer/tests/dVTrainer/Data/exp_data_15
+SurRoL_dVTrainer/tests/dVTrainer/Data/exp_data_15_out
