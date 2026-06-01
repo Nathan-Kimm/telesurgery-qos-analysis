@@ -1730,7 +1730,6 @@ class FrameRecorder:
         self.frame_count = 0
         self.saved_count = 0
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-        self.futures = []
 
         self.loop_times = []
         self.capture_times = []
@@ -1739,7 +1738,12 @@ class FrameRecorder:
         self.process = psutil.Process()
         
         for subdir in ("rgb", "depth", "seg"):
-            os.makedirs(os.path.join(output_dir, subdir), exist_ok=True)
+            dirpath = os.path.join(output_dir, subdir)
+            if os.path.exists(dirpath):
+                for f in os.listdir(dirpath):
+                    os.remove(os.path.join(dirpath, f))
+            else:
+                os.makedirs(dirpath)
 
     def step(self, view_matrix, proj_matrix):
         now = time.time()
@@ -1761,14 +1765,10 @@ class FrameRecorder:
             rgb_copy   = np.array(rgb_pixels,   dtype=np.uint8).reshape(height, width, 4).copy()
             depth_copy = np.array(depth_pixels, dtype=np.float32).reshape(height, width).copy()
             seg_copy   = np.array(seg_pixels,   dtype=np.int32).reshape(height, width).copy()
-            future = self.executor.submit(
-                self.write_frame, idx, rgb_copy, depth_copy, seg_copy
-            )
 
-            self.futures.append(future)
+            self.executor.submit(self.write_frame, idx, rgb_copy, depth_copy, seg_copy)
             
         self.frame_count += 1
-        return (width, height, rgb_pixels, depth_pixels, seg_pixels)
 
     def write_frame(self, idx, rgb, depth, seg):
         t0 = time.time()
@@ -1813,7 +1813,6 @@ class FrameRecorder:
 
     def close(self):
         """Wait for all pending writes to finish, then print stats."""
-        concurrent.futures.wait(self.futures)
         self.executor.shutdown(wait=True)
         self.print_stats()
 
@@ -2336,9 +2335,7 @@ class SurgicalSimulatorBimanual(SurgicalSimulatorBase):
                 self.after_simulation_step()
                 # Call trigger update scene (if necessary) and draw methods
                 
-                (width, height, rgb_pixels, depth_pixels, seg_pixels) = self.frame_recorder.step(
-                    self.env._view_matrix, self.env._proj_matrix
-                )
+                self.frame_recorder.step(self.env._view_matrix, self.env._proj_matrix)
                 p.setGravity(0,0,-10.0)
                 #print(width, height, rgb_pixels.shape, depth_pixels.shape, seg_pixels.shape)
                 self.time = task.time
