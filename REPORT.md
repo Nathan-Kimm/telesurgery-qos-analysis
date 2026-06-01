@@ -47,6 +47,27 @@ To better see the difference between the original run and the replayed trajector
 ## 7. Usage Instructions
 ## 8. Results
 ## 9. Performance Profiling
+
+===== FrameRecorder Performance =====
+  Sim frames total  : 5084
+  Frames saved      : 1017
+  Capture interval  : every 5 frame(s)
+  Avg sim loop freq : 57.9 FPS
+  getCameraImage    : mean=11.62ms  max=829.79ms
+  Disk write (bg)   : mean=10.44ms  max=114.17ms
+  Process RSS mem   : 784.5 MB
+
+===== FrameRecorder Performance =====
+  Sim frames total  : 4930
+  Frames saved      : 4930
+  Capture interval  : every 1 frame(s)
+  Avg sim loop freq : 56.4 FPS
+  getCameraImage    : mean=11.59ms  max=840.05ms
+  Disk write (bg)   : mean=9.97ms  max=164.59ms
+  Process RSS mem   : 775.4 MB
+
+
+
 ## 10. Tests
 ## 11. Limitations and Future Improvements
 ## 12. GenAI Use Disclosure

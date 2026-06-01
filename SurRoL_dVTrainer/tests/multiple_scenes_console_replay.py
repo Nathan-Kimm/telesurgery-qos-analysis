@@ -1777,8 +1777,8 @@ class FrameRecorder:
         bgr = rgb[:, :, :3][:, :, ::-1]
         cv2.imwrite(os.path.join(self.output_dir, "rgb", prefix + "_rgb.png"), bgr)
 
-        depth_normalized = ((depth - depth.min()) / (depth.ptp() + 1e-8) * 255).astype(np.uint8)
-        cv2.imwrite(os.path.join(self.output_dir, "depth", prefix + "_depth.png"), depth_normalized)
+        depth_viewable = (np.clip(depth, 0.0, 1.0) * 255).astype(np.uint8)
+        cv2.imwrite(os.path.join(self.output_dir, "depth", prefix + "_depth.png"), depth_viewable)
         np.save(os.path.join(self.output_dir, "depth", prefix + "_depth.npy"), depth)
 
         seg_vis = (seg % 256).astype(np.uint8)
@@ -1805,7 +1805,7 @@ class FrameRecorder:
         print(f"  Sim frames total  : {self.frame_count}")
         print(f"  Frames saved      : {self.saved_count}")
         print(f"  Capture interval  : every {self.n} frame(s)")
-        print(f"  Avg sim loop freq : {avg_fps:.1f} Hz")
+        print(f"  Avg sim loop freq : {avg_fps:.1f} FPS")
         print(f"  getCameraImage    : {_fmt(self.capture_times)}")
         print(f"  Disk write (bg)   : {_fmt(self.write_times)}")
         print(f"  Process RSS mem   : {mem_mb:.1f} MB")
