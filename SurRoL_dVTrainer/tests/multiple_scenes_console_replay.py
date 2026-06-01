@@ -13,6 +13,10 @@ import math
 import imageio
 import time
 
+import concurrent.futures
+import psutil
+import cv2
+
 from surrol.gui.scene import Scene, GymEnvScene
 from surrol.gui.application import Application, ApplicationConfig
 from surrol.tasks.ecm_misorient import MisOrient
@@ -49,6 +53,7 @@ from dVTrainer.random_experiment_new import user_num
 from dVTrainer.obs_controller import OBSController
 from scipy.spatial.transform import Rotation as R
 
+CAPTURE_N = 5
 app = None
 hint_printed = False
 resetFlag = False
@@ -1715,6 +1720,104 @@ class MenuBarUI(MDApp):
             self.screen.ids.btn4.bind(on_press = lambda _: (open_scene(0), open_scene(self.id-1)))
         else:
             self.screen.ids.btn4.bind(on_press = lambda _:(open_scene(0), open_scene(self.id+1)))
+
+class FrameRecorder:
+    def __init__(self, output_dir="frame_output", n=CAPTURE_N, width=256, height=256, max_workers=4):
+        self.output_dir = output_dir
+        self.n = n
+        self.width = width
+        self.height = height
+        self.frame_count = 0
+        self.saved_count = 0
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        self.futures = []
+
+        self.loop_times = []
+        self.capture_times = []
+        self.write_times = []
+        self.last_step = None
+        self.process = psutil.Process()
+        
+        for subdir in ("rgb", "depth", "seg"):
+            os.makedirs(os.path.join(output_dir, subdir), exist_ok=True)
+
+    def step(self, view_matrix, proj_matrix):
+        now = time.time()
+        if self.last_step is not None:
+            self.loop_times.append(now - self.last_step)
+        self.last_step = now
+
+        t0 = time.time()
+        (width, height, rgb_pixels, depth_pixels, seg_pixels) = p.getCameraImage(
+                    width=256, height=256,
+                    viewMatrix=view_matrix,
+                    projectionMatrix=proj_matrix)
+        self.capture_times.append(time.time() - t0)
+
+        if self.frame_count % self.n == 0:
+            idx = self.saved_count
+            self.saved_count += 1
+
+            rgb_copy   = np.array(rgb_pixels,   dtype=np.uint8).reshape(height, width, 4).copy()
+            depth_copy = np.array(depth_pixels, dtype=np.float32).reshape(height, width).copy()
+            seg_copy   = np.array(seg_pixels,   dtype=np.int32).reshape(height, width).copy()
+            future = self.executor.submit(
+                self.write_frame, idx, rgb_copy, depth_copy, seg_copy
+            )
+
+            self.futures.append(future)
+            
+        self.frame_count += 1
+        return (width, height, rgb_pixels, depth_pixels, seg_pixels)
+
+    def write_frame(self, idx, rgb, depth, seg):
+        t0 = time.time()
+        prefix = f'{idx:06d}'
+
+        bgr = rgb[:, :, :3][:, :, ::-1]
+        cv2.imwrite(os.path.join(self.output_dir, "rgb", prefix + "_rgb.png"), bgr)
+
+        depth_normalized = ((depth - depth.min()) / (depth.ptp() + 1e-8) * 255).astype(np.uint8)
+        cv2.imwrite(os.path.join(self.output_dir, "depth", prefix + "_depth.png"), depth_normalized)
+        np.save(os.path.join(self.output_dir, "depth", prefix + "_depth.npy"), depth)
+
+        seg_vis = (seg % 256).astype(np.uint8)
+        cv2.imwrite(os.path.join(self.output_dir, "seg", prefix + "_seg.png"), seg_vis)
+        np.save(os.path.join(self.output_dir, "seg", prefix + "_seg.npy"), seg)
+
+        self.write_times.append(time.time() - t0)
+
+    
+    def print_stats(self):
+        """Print a profiling summary."""
+        import statistics
+        def _fmt(vals):
+            if not vals:
+                return "n/a"
+            return f"mean={statistics.mean(vals)*1000:.2f}ms  max={max(vals)*1000:.2f}ms"
+
+        mem_mb = self.process.memory_info().rss / 1e6
+        if self.loop_times:
+            avg_fps = 1.0 / statistics.mean(self.loop_times)
+        else:
+            avg_fps = 0
+        print("\n===== FrameRecorder Performance =====")
+        print(f"  Sim frames total  : {self.frame_count}")
+        print(f"  Frames saved      : {self.saved_count}")
+        print(f"  Capture interval  : every {self.n} frame(s)")
+        print(f"  Avg sim loop freq : {avg_fps:.1f} Hz")
+        print(f"  getCameraImage    : {_fmt(self.capture_times)}")
+        print(f"  Disk write (bg)   : {_fmt(self.write_times)}")
+        print(f"  Process RSS mem   : {mem_mb:.1f} MB")
+        print("=====================================\n")
+
+    def close(self):
+        """Wait for all pending writes to finish, then print stats."""
+        concurrent.futures.wait(self.futures)
+        self.executor.shutdown(wait=True)
+        self.print_stats()
+
+
 class SurgicalSimulatorBase(GymEnvScene):
     def __init__(self, env_type, env_params):
         super(SurgicalSimulatorBase, self).__init__(env_type, env_params)
@@ -2211,6 +2314,15 @@ class SurgicalSimulatorBimanual(SurgicalSimulatorBase):
         self.obs.connect()
         #self.obs.start_recording()
 
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.join(script_dir, "dVTrainer/Data/exp_data_15/no_fault")
+        self.frame_recorder = FrameRecorder(
+            output_dir=output_dir,
+            n=CAPTURE_N,
+            width=256,
+            height=256
+        )
+
     def _step_simulation_task(self, task):
         """Step simulation
         """
@@ -2222,12 +2334,11 @@ class SurgicalSimulatorBimanual(SurgicalSimulatorBase):
                 # Step simulation
                 p.stepSimulation()
                 self.after_simulation_step()
-
                 # Call trigger update scene (if necessary) and draw methods
-                (width, height, rgb_pixels, depth_pixels, seg_pixels) = p.getCameraImage(
-                    width=256, height=256,
-                    viewMatrix=self.env._view_matrix,
-                    projectionMatrix=self.env._proj_matrix)
+                
+                (width, height, rgb_pixels, depth_pixels, seg_pixels) = self.frame_recorder.step(
+                    self.env._view_matrix, self.env._proj_matrix
+                )
                 p.setGravity(0,0,-10.0)
                 #print(width, height, rgb_pixels.shape, depth_pixels.shape, seg_pixels.shape)
                 self.time = task.time
@@ -2269,10 +2380,8 @@ class SurgicalSimulatorBimanual(SurgicalSimulatorBase):
                 self.after_simulation_step()
 
                 # Call trigger update scene (if necessary) and draw methods
-                p.getCameraImage(
-                    width=1, height=1,
-                    viewMatrix=self.env._view_matrix,
-                    projectionMatrix=self.env._proj_matrix)
+
+                self.frame_recorder.step(self.env._view_matrix, self.env._proj_matrix)
                 p.setGravity(0,0,-10.0)
 
                 self.time = time.time()
@@ -2454,6 +2563,7 @@ class SurgicalSimulatorBimanual(SurgicalSimulatorBase):
         self.obs.stop_recording()
         self.logger1.close()
         self.logger2.close()
+        self.frame_recorder.close()
         self.kivy_ui.stop()
         self.app.win.removeDisplayRegion(self.ui_display_region)
 
