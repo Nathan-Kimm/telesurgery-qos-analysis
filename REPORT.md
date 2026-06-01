@@ -50,9 +50,12 @@ To better see the difference between the original run and the replayed trajector
 
 As seen in the visualizations we can see that the replays have the exact same trajectories but at different times. 
 
-This is most likely due to the replay script
+This desyncrhonization is due to how packets are sent through the replay script. After further analysis of replay.py and specifically the variables `time_delta (line 44)` and `sleep_time (line 45)`, we can see that sleep_time varies wildly due to the script being relative to the previuos packet. After printing the values sleep_time was, I noticed that it can vary significantly with the sleep_time ranging from numbers like 1.38e-05 to 0.01 and also sometimes 0. This varying sleep_time leads to drift over time as the differences compound throughout the replay. 
+
+This drift can be mitigated by changing how the packets are sent. Instead of relying on a relative sleep_time we can sync the replay to an absolute global clock, ensuring that packets are sent at consistent intervals.
 
 ## 5. Part 3: Simulation Development
+
 ## 6. Code Changes
 ## 7. Usage Instructions
 ## 8. Results
