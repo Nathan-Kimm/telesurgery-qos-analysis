@@ -55,6 +55,14 @@ This desyncrhonization is due to how packets are sent through the replay script.
 This drift can be mitigated by changing how the packets are sent. Instead of relying on a relative sleep_time we can sync the replay to an absolute global clock, ensuring that packets are sent at consistent intervals.
 
 ## 5. Part 3: Simulation Development
+I edited the `multiple_scenes_console_replay.py` file and modified it to store RGB, Depth, and Object segmentation data. The RGB, Depth, and Object segmentation outputs are stored in `SurRoL_dVTrainer/tests/dVTrainer/Data/exp_data_15/no_fault` where rgb, depth, and seg directories are created. These directories are cleared each time it is run to prevent output from multiple sessions overlapping. .png files are saved for rgb while depth and object sementation saves .png and .npy files. 
+
+To efficiently capture data, multithreading was utilized through `concurrent.futures` where I used the `concurrent.futures.ThreadPoolExecutor()` to prevent the disk writing from pausing the main simulation loop. In addition to that, the OpenCV method `cv2.imwrite()` was used as opposed to `imageio.imwrite()` due to the OpenCV method being faster.
+
+To implement this a new FrameRecorder class was created where step is called each frame and saves the rgb, depth, and object sementation output every n frames. Additionally, performance statistics such as FPS, frame capture overhead, disk-writing overhead, and memory usage. To calculate memory usage, the library `psutil` was used. 
+
+The PyBullet method `.getCameraImage()` was used to capture camera data. This method is appropriate for this task as it captures RGB, depth, and segmentation masks which is the data we are trying to capture.
+
 
 ## 6. Code Changes
 ## 7. Usage Instructions
