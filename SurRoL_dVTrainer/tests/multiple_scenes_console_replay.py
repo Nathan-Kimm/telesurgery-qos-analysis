@@ -53,7 +53,12 @@ from dVTrainer.random_experiment_new import user_num
 from dVTrainer.obs_controller import OBSController
 from scipy.spatial.transform import Rotation as R
 
+# n frames for FrameRecorder
 CAPTURE_N = 5
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Output directory for FrameRecorder
+OUTPUT_DIR = os.path.join(script_dir, "dVTrainer/Data/exp_data_15/no_fault")
+
 app = None
 hint_printed = False
 resetFlag = False
@@ -1722,21 +1727,29 @@ class MenuBarUI(MDApp):
             self.screen.ids.btn4.bind(on_press = lambda _:(open_scene(0), open_scene(self.id+1)))
 
 class FrameRecorder:
-    def __init__(self, output_dir="frame_output", n=CAPTURE_N, width=256, height=256, max_workers=4):
+    def __init__(self, output_dir=OUTPUT_DIR, n=CAPTURE_N, width=256, height=256, max_workers=4):
         self.output_dir = output_dir
         self.n = n
         self.width = width
         self.height = height
+        
+        # Counts total frames
         self.frame_count = 0
+        # Counts number of frames saved
         self.saved_count = 0
+
+        # Thread pool for asynchronous file writing
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 
+        # Profiling metrics
         self.loop_times = []
         self.capture_times = []
         self.write_times = []
         self.last_step = None
         self.process = psutil.Process()
         
+        # Initialize output directories
+        # Create directories if they don't exist and clear out old files if they do
         for subdir in ("rgb", "depth", "seg"):
             dirpath = os.path.join(output_dir, subdir)
             if os.path.exists(dirpath):
@@ -1745,12 +1758,16 @@ class FrameRecorder:
             else:
                 os.makedirs(dirpath)
 
+
     def step(self, view_matrix, proj_matrix):
+        """Called during each step of the simulation loop to capture images"""
         now = time.time()
+        # Track time taken since last step
         if self.last_step is not None:
             self.loop_times.append(now - self.last_step)
         self.last_step = now
 
+        # Captures image using PyBullet and adds to capture_times
         t0 = time.time()
         (width, height, rgb_pixels, depth_pixels, seg_pixels) = p.getCameraImage(
                     width=256, height=256,
@@ -1758,10 +1775,12 @@ class FrameRecorder:
                     projectionMatrix=proj_matrix)
         self.capture_times.append(time.time() - t0)
 
+        # Save every nth frame
         if self.frame_count % self.n == 0:
             idx = self.saved_count
             self.saved_count += 1
 
+            # Create copies to prevent overwriting
             rgb_copy   = np.array(rgb_pixels,   dtype=np.uint8).reshape(height, width, 4).copy()
             depth_copy = np.array(depth_pixels, dtype=np.float32).reshape(height, width).copy()
             seg_copy   = np.array(seg_pixels,   dtype=np.int32).reshape(height, width).copy()
@@ -1771,16 +1790,21 @@ class FrameRecorder:
         self.frame_count += 1
 
     def write_frame(self, idx, rgb, depth, seg):
+        """Background task, formats and writes the RGB, depth, and segmentation data"""
         t0 = time.time()
         prefix = f'{idx:06d}'
 
+        # OpenCV utilizes BGR format. [:, :, :3] drops the alpha channel
+        # [:, :, ::-1] reverses the color channel
         bgr = rgb[:, :, :3][:, :, ::-1]
         cv2.imwrite(os.path.join(self.output_dir, "rgb", prefix + "_rgb.png"), bgr)
 
+        # Save a viewable png making the floating point number from 0-255
         depth_viewable = (np.clip(depth, 0.0, 1.0) * 255).astype(np.uint8)
         cv2.imwrite(os.path.join(self.output_dir, "depth", prefix + "_depth.png"), depth_viewable)
         np.save(os.path.join(self.output_dir, "depth", prefix + "_depth.npy"), depth)
 
+        # % 256 to wrap around and have range of 0-255
         seg_vis = (seg % 256).astype(np.uint8)
         cv2.imwrite(os.path.join(self.output_dir, "seg", prefix + "_seg.png"), seg_vis)
         np.save(os.path.join(self.output_dir, "seg", prefix + "_seg.npy"), seg)
@@ -1791,12 +1815,15 @@ class FrameRecorder:
     def print_stats(self):
         """Print a profiling summary."""
         import statistics
+        # Helper method to format data
         def _fmt(vals):
             if not vals:
                 return "n/a"
             return f"mean={statistics.mean(vals)*1000:.2f}ms  max={max(vals)*1000:.2f}ms"
-
+        # Calculate memory footprint
         mem_mb = self.process.memory_info().rss / 1e6
+
+        # Calculate average fps
         if self.loop_times:
             avg_fps = 1.0 / statistics.mean(self.loop_times)
         else:
@@ -2313,10 +2340,9 @@ class SurgicalSimulatorBimanual(SurgicalSimulatorBase):
         self.obs.connect()
         #self.obs.start_recording()
 
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        output_dir = os.path.join(script_dir, "dVTrainer/Data/exp_data_15/no_fault")
+        
         self.frame_recorder = FrameRecorder(
-            output_dir=output_dir,
+            output_dir=OUTPUT_DIR,
             n=CAPTURE_N,
             width=256,
             height=256
