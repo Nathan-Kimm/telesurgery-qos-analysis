@@ -1,5 +1,11 @@
 # Undergraduate Research Trial Task Submission
 ## 1. Summary
+I successfully set up the simulator using a native Ubuntu 20.04 installation and was able to record the simulation. 
+
+I then created a plotting script visualizing the difference between an original replay and another replay. I noticed that there is a difference between when the robot inputs occured indiciating some sort of timing mismatch.
+
+Lastly, also modified the simulator to store RGB, depth, and segmentation data efficiently with no noticeable performance impact.
+
 ## 2. Environment and Setup
 Currently running the simulator on Ubuntu 20.04 LTS with an Nvidia GPU and AMD CPU. 
 
@@ -41,6 +47,10 @@ To better see the difference between the original run and the replayed trajector
 | :--- | :---: | :---: | ---: |
 | MAE: 0.015812  | MAE: 0.002710 | MAE: 0.005327 | MAE: 0.061396 |
 | Max Error: 0.072686 | Max Error: 0.024145 | Max Error: 0.044219 | Max Error: 0.831262 |
+
+As seen in the visualizations we can see that the replays have the exact same trajectories but at different times. 
+
+This is most likely due to the replay script
 
 ## 5. Part 3: Simulation Development
 ## 6. Code Changes
