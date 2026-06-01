@@ -94,6 +94,9 @@ To run `/analysis/network/plot_original_and_replay.py`, ensure that the director
 
 ### Updated multiple_scenes_console_replay.py
 First install psutil by doing `pip install psutil` and then run `python multiple_scenes_console_replay.py` Variables such as N and output directory can be found on lines 57 and 60 respectively
+
+### Run Tests
+To run `test_frame_recorder.py` first install PyTest by running `pip install pytest`. Run the file with `pytest test_frame_recorder.py`, this will launch to the simulator. After navigating to the Bi-Peg transfer and running the simulator, the test will conclude. 
 ## 8. Results
 In part 2, I was able to create visuals comparing the original and replayed trajectories and error values between the two replays
 
@@ -124,6 +127,8 @@ As we can see above the FrameRecorder is able to efficiently save these frames w
 
 ## 10. Tests
 Ran any edited code several times to ensure consistent output and results. 
+
+Created simple test using PyTest in the file `test_frame_recorder.py` to ensure directories are being created properly.
 ## 11. Limitations and Future Improvements
 In part 2, I would like to work on fixing this time discrepency in the future. 
 
@@ -132,5 +137,7 @@ One main limitation is in part 3 with how the rgb, depth, and object segmentatio
 Generative AI, specifically Google Gemini, was used to help setup the enivronment as I was initally running into several errors setting up the simulator. 
 
 Claude was used for debugging. Claude was also used to help with portions of part 3 such as making depth and seg visible in the method `write_frame` and suggested creating copies in the method `step` both in the `FrameRecorder` class. 
+
+Gemini was also utilized to create simple test found in `test_frame_recorder.py`
 
 Outputs of all AI output was checked manually.
